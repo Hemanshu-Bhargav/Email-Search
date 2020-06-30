@@ -1,0 +1,62 @@
+D1: red flower yellow flower
+D2: red color
+D3: color of flowers
+
+unique terms: color, flower, red, yellow
+
+N=3
+t=4
+t1=3, t2=2, t3=2
+
+itf for three documents:
+itf1=log(t/t1)=log(4/3)=0.125
+itf2=log(4/2)=0.301
+itf3=log(4/2)=0.301
+
+vector for each term:
+for term 1 (color):
+w11=(0.5+0.5*0)*itf1=0.5*0.125=0.0625
+w12=(0.5+0.5*1/1)*itf2=1*0.301=0.301
+w13=(0.5+0.5*1/1)*itf3=1*0.301=0.301
+after normalization (denominator 0.43)
+k1=(0.145, 0.7, 0.7)
+
+for term 2 (flower):
+w21=(0.5+0.5*2/2)*0.125=0.125
+w22=(0.5+0.5*0)*0.301=0.15
+w23=(0.5+0.5*1/2)*0.301=0.226
+after normalization (denominator 0.3)
+k2=(0.417, 0.5, 0.753)
+
+for term 3 (red):
+w31=(0.5+0.5*1/1)*0.125=0.125
+w32=(0.5+0.5*1/1)*0.301=0.301
+w33=(0.5+0.5*0)*0.301=0.15
+after normalization (denominator 0.36)
+k3=(0.347, 0.836, 0.417)
+
+for term 4 (yellow):
+w41=(0.5+0.5*1/1)*0.125=0.125
+w42=(0.5+0.5*0)*0.301=0.15
+w43=(0.5+0.5*0)*0.301=0.15
+after normalization (denominator 0.25)
+k4=(0.5, 0.6, 0.6)
+
+similarity between each pair of words:
+c12=k1 dot k2=0.145*0.417+0.7*0.5+0.7*0.753=0.938
+c13=k1 dot k3=0.145*0.347+0.7*0.836+0.7*0.417=0.927
+c14=k1 dot k4=0.145*0.5+0.7*0.6+0.7*0.6=0.913
+
+c23=k2 dot k3=0.417*0.347+0.5*0.836+0.753*0.417=0.877
+c24=k2 dot k4=0.417*0.5+0.5*0.6+0.753*0.6=0.96
+
+c34=k3 dot k4=0.347*0.5+0.836*0.6+0.417*0.6=0.925
+
+now we can draw the term-term similarity matrix (you may only fill the upper triangle)
+	color	flower	red	yellow
+color		0.938	0.927	0.913
+flower	0.938		0.877	0.96
+red	0.927	0.877		0.925
+yellow	0.913	0.96	0.925
+
+based on this global thesaurus, we may say that "yellow" and "flower" are most similar words in this collection.
