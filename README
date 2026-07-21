@@ -6,20 +6,6 @@ This project builds a portable email search system designed to "bridge the gap" 
 
 ---
 
-## Author Information
-
-* **Student Name:** Hemanshu Bhargav
-
-
-* **Student ID:** 500588413
-
-
-* **Course:** CPS 842: Information Retrieval and Web Search
-
-
-
----
-
 ## System Architecture & Files
 
 1. **`Email_Search_Program_Hemanshu_Bhargav_500588413.py`**: The core Python backend script responsible for IMAP authentication, email fetching, NLP tokenization, TF-IDF vectorization, Google Sheets synchronization, and interactive search execution.
