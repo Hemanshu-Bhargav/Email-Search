@@ -1,25 +1,24 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# First, extract a user's gmail for email messages which will form the corpus[cite: 5]
-# This corpus will then be exported to Google Sheets[cite: 5]
-# As explained in the proposal, the intended usage of this program[cite: 5]
-# is to "bridge the gap" that exists for Google Add-on development[cite: 5]
-# Although, search within Google exists, if any GMail account users wishes[cite: 5]
-# to install an add-on for increased functionality, the onus is on the developer[cite: 5]
-# of that add-on to implement a reliable search program which is compatible[cite: 5]
-# with Google's services. This program aims to be a portable solution.[cite: 5]
-# Note: Understandably, python's execution is not as fast as say Java's, due[cite: 5]
-# to the differences of compiled and interpreted languages, but because assignment[cite: 5]
-# one and two were written in Python, this project is as well (due to time constraints)[cite: 5]
+# First, extract a user's gmail for email messages which will form the corpus
+# This corpus will then be exported to Google Sheets
+# As explained in the proposal, the intended usage of this program
+# is to "bridge the gap" that exists for Google Add-on development
+# Although, search within Google exists, if any GMail account users wishes
+# to install an add-on for increased functionality, the onus is on the developer
+# of that add-on to implement a reliable search program which is compatible
+# with Google's services. This program aims to be a portable solution.
+# Note: Understandably, python's execution is not as fast as say Java's
+# due to the differences of compiled and interpreted languages, but Python was chosen for portability with future IR applications
 
-# As add-ons can only use Google sheets for their database and because parsing attachments[cite: 5]
-# is both out of the scope of this project and ethically questionable, attachments are ignored[cite: 5]
+# As add-ons can only use Google sheets for their database and because parsing attachments
+# is both out of the scope of this project and ethically questionable, attachments are ignored
 
 # ==========================================
 # UNIFIED EMAIL SEARCH & VECTOR SPACE ENGINE
-# Combines IMAP/Google Sheets integration with[cite: 5]
-# CPS 842 TF-IDF and Cosine Similarity Retrieval[cite: 3, 4]
+# Combines IMAP/Google Sheets integration with
+# CPS 842 TF-IDF and Cosine Similarity Retrieval
 # ==========================================
 
 import email
@@ -48,14 +47,14 @@ GOOGLE_SHEET_NAME = "CPS 842 Project V1"
 # ==========================================
 
 def user_prompt():
-    """Prompts user for Gmail credentials and recipient target[cite: 5]."""
+    """Prompts user for Gmail credentials and recipient target."""
     username = input("Please enter your Gmail username: ")
     password = getpass.getpass("Enter your password: ")
     recipient = input("Please enter whose emails you'd like to store (e.g., sender@gmail.com): ")
     return username, password, recipient
 
 def fetch_emails(username, password, recipient):
-    """Connects to Gmail via IMAP and extracts emails from a specific sender[cite: 5]."""
+    """Connects to Gmail via IMAP and extracts emails from a specific sender."""
     try:
         sign_in_link = imaplib.IMAP4_SSL("imap.gmail.com")
         sign_in_link.login(username, password)
@@ -110,7 +109,7 @@ def fetch_emails(username, password, recipient):
 # ==========================================
 
 def load_stopwords(filepath='stopwords.txt'):
-    """Loads stopwords from file, stripping newline characters[cite: 3]."""
+    """Loads stopwords from file, stripping newline characters."""
     if os.path.exists(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             return set(line.strip().lower() for line in f if line.strip())
@@ -118,7 +117,7 @@ def load_stopwords(filepath='stopwords.txt'):
 
 def parse_and_preprocess_emails(emails, stop_words):
     """
-    Tokenizes email subject and body, applies stopword removal, and Porter stemming[cite: 3].
+    Tokenizes email subject and body, applies stopword removal, and Porter stemming.
     """
     stemmer = PorterStemmer()
     documents = {}
@@ -148,7 +147,7 @@ def parse_and_preprocess_emails(emails, stop_words):
 
 def build_tfidf_matrix(documents, vocab):
     """
-    Constructs a vectorized TF-IDF matrix for the email corpus using NumPy and L2 normalization[cite: 3].
+    Constructs a vectorized TF-IDF matrix for the email corpus using NumPy and L2 normalization.
     """
     num_docs = len(documents)
     vocab_size = len(vocab)
@@ -182,7 +181,7 @@ def build_tfidf_matrix(documents, vocab):
     return tfidf_matrix, vocab_to_idx, msg_ids
 
 def process_query(query, vocab_to_idx, stop_words):
-    """Converts a raw string query into a normalized TF vector[cite: 3]."""
+    """Converts a raw string query into a normalized TF vector."""
     stemmer = PorterStemmer()
     vocab_size = len(vocab_to_idx)
     query_vec = np.zeros(vocab_size, dtype=np.float64)
@@ -207,7 +206,7 @@ def process_query(query, vocab_to_idx, stop_words):
     return query_vec
 
 def search_emails(query_vec, tfidf_matrix, msg_ids, top_k=5):
-    """Computes cosine similarity via dot product and returns ranked results[cite: 3]."""
+    """Computes cosine similarity via dot product and returns ranked results."""
     similarities = tfidf_matrix.dot(query_vec)
     top_indices = np.argsort(similarities)[::-1][:top_k]
     
@@ -224,7 +223,7 @@ def search_emails(query_vec, tfidf_matrix, msg_ids, top_k=5):
 # ==========================================
 
 def export_to_google_sheets(all_emails, credentials_file, sheet_name):
-    """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets[cite: 5]."""
+    """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets."""
     if not all_emails:
         print("No emails to export.")
         return
@@ -246,18 +245,18 @@ def export_to_google_sheets(all_emails, credentials_file, sheet_name):
         sh = gc.open(sheet_name)
         wks = sh[0]
         wks.set_dataframe(df, (1, 1))
-        print(f"Successfully exported {len(df)} emails to Google Sheet: {sheet_name}[cite: 5]")
+        print(f"Successfully exported {len(df)} emails to Google Sheet: {sheet_name}")
     except Exception as e:
-        print(f"Google Sheets API integration failed ({e}). Exporting to local CSV instead[cite: 5].")
+        print(f"Google Sheets API integration failed ({e}). Exporting to local CSV instead.")
         df.to_csv("exported_emails.csv", index=False)
-        print("Data successfully saved to 'exported_emails.csv'[cite: 5].")
+        print("Data successfully saved to 'exported_emails.csv'.")
 
 # ==========================================
 # INTERACTIVE CLI SEARCH LOOP
 # ==========================================
 
 def user_input_search(tfidf_matrix, vocab_to_idx, msg_ids, all_emails, stop_words):
-    """Allows ranked interactive TF-IDF search queries across the loaded email corpus[cite: 3, 5]."""
+    """Allows ranked interactive TF-IDF search queries across the loaded email corpus."""
     while True:
         user_input = input("\nEnter search query (or type 'quit' to exit): ").strip()
         if user_input.lower() == 'quit':
