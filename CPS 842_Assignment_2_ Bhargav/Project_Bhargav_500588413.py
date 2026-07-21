@@ -16,7 +16,7 @@ from nltk.stem import PorterStemmer
 
 def load_stopwords():
     stop = open('stopwords.txt', 'r')
-    # Fixed: strip newline characters so stopword filtering actually works
+    # Strip newline characters for stopword filtering
     criteria = set(line.strip().lower() for line in stop if line.strip())
     stop.close()
     return criteria
