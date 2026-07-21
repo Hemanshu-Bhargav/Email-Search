@@ -11,197 +11,184 @@
 # wordsDoc.values = document frequency (documents the term occurs in)
 
 import math
+import numpy as np
 from nltk.stem import PorterStemmer
 
-def load_stopwords(filepath='stopwords.txt'):
-    """Loads stopwords manually into a set, trimming newlines."""
-    stop_words = set()
-    try:
-        with open(filepath, 'r') as file:
-            for line in file:
-                cleaned_line = line.strip().lower()
-                if cleaned_line:
-                    stop_words.add(cleaned_line)
-    except FileNotFoundError:
-        print(f"Warning: '{filepath}' not found. Continuing without stopwords.")
-    return stop_words
+def load_stopwords():
+    stop = open('stopwords.txt', 'r')
+    # Fixed: strip newline characters so stopword filtering actually works
+    criteria = set(line.strip().lower() for line in stop if line.strip())
+    stop.close()
+    return criteria
 
-def parse_corpus(cacm_path, stop_words, stemmer):
-    """
-    Parses cacm.all from scratch, builds term frequencies per document,
-    and returns document dictionary and vocabulary.
-    """
-    doc_data = {}
-    current_doc_id = None
-    in_body = False
-    tokens = []
+def invert(cacm):
+    stop_words = load_stopwords()
+    stemming = PorterStemmer()
+    
+    # Create an empty dictionary (implemented as hashmap in python)
+    dicDoc = {}
+    key = ""
+    writeInFile = False
+    docBody = []
+    
+    # automatically closes after opening
+    with open(cacm, 'r') as file:
+        for line in file.readlines():
+            # document ID '.I', title '.T', and abstract '.W' all occur before '.B'
+            if ".B" in line:
+                writeInFile = False
+                # Store term frequencies
+                dictFreq = {}
+                for item in docBody:
+                    dictFreq[item] = dictFreq.get(item, 0) + 1
+                # enumerate the body (Terms) and key is Document ID '.I'
+                dicDoc[key] = [list(enumerate(docBody)), dictFreq]
+                docBody = []
 
-    with open(cacm_path, 'r') as file:
-        for line in file:
-            line_str = line.strip()
+            elif writeInFile:
+                if len(line.strip()) != 0:
+                    # split the terms from the lines into separate words, lowercase, and stem individually
+                    for word in line.strip().split():
+                        word_lower = word.lower()
+                        if word_lower not in stop_words:
+                            stemmed_term = stemming.stem(word_lower)
+                            docBody.append(stemmed_term)
 
-            if line_str.startswith(".I"):
-                if current_doc_id is not None:
-                    tf_dict = {}
-                    for term in tokens:
-                        tf_dict[term] = tf_dict.get(term, 0) + 1
-                    doc_data[current_doc_id] = [list(enumerate(tokens)), tf_dict]
+            elif ".I" in line:
+                key = line.strip()
+                writeInFile = True
 
-                current_doc_id = line_str
-                tokens = []
-                in_body = True
-
-            elif line_str.startswith(".B"):
-                in_body = False
-
-            elif in_body and not line_str.startswith("."):
-                words = line_str.split()
-                for word in words:
-                    word_lower = word.lower()
-                    if word_lower not in stop_words:
-                        stemmed_word = stemmer.stem(word_lower)
-                        tokens.append(stemmed_word)
-
-        if current_doc_id is not None:
-            tf_dict = {}
-            for term in tokens:
-                tf_dict[term] = tf_dict.get(term, 0) + 1
-            doc_data[current_doc_id] = [list(enumerate(tokens)), tf_dict]
-
-    return doc_data
-
-def build_inverted_index(dicDoc):
-    """Builds wordsDoc mapping terms to document IDs containing them."""
+    # For postings file, extract terms and their document id from dictionary
+    # wordsdoc = terms and the documents they occur in
     wordsDoc = {}
     for doc in dicDoc:
-        for key in dicDoc[doc][1].keys():
-            if key not in wordsDoc:
-                wordsDoc[key] = [doc]
+        for term_key in dicDoc[doc][1].keys():
+            # if not already present
+            if term_key not in wordsDoc.keys():
+                wordsDoc[term_key] = [doc]
             else:
-                wordsDoc[key].append(doc)
-    return wordsDoc
+                # key = term, value is all documents containing that key
+                wordsDoc[term_key] = wordsDoc[term_key] + [doc]
 
-def compute_tfidf_and_normalize(dicDoc):
-    """
-    Computes TF-IDF and Euclidean Normalization (L2 norm) 
-    completely manually using explicit loops and basic math.
-    """
-    total_docs = len(dicDoc)
+    # Above code continued and terms sorted alphabetically
+    search = sorted(wordsDoc.keys())
+    # wordsDoc = terms and the documents they occur in
+    search_terms = list(search)
 
-    # 1. Compute Document Frequency (DF) for each term manually
-    df_dict = {}
-    for docKey in dicDoc.keys():
-        for term in dicDoc[docKey][1].keys():
-            df_dict[term] = df_dict.get(term, 0) + 1
+    return dicDoc, wordsDoc, search_terms
 
-    # 2. Compute Inverse Document Frequency (IDF) manually
-    idf_dict = {}
-    for term, df in df_dict.items():
-        idf_dict[term] = math.log(total_docs / df)
+cacm = 'cacm.all'
+dicDoc, wordsDoc, search_terms = invert(cacm)
 
-    # 3. Compute TF-IDF weights and Euclidean Norm per document
-    normalized_doc_vectors = {}
-    for docKey, doc_content in dicDoc.items():
-        sum_of_squares = 0.0
-        doc_weights = {}
+# Compute term frequencies
+search_Terms = set({}) # recall that sets are unordered, converted to list below. Here, creates a
+# set of distinct terms (Removal of duplicates before actual frequency math happens)
+for docKey in dicDoc.keys():
+    search_Terms = search_Terms.union(dicDoc[docKey][1].keys())
 
-        for term, count in doc_content[1].items():
-            tf_weight = 1.0 + math.log(count)
-            tfidf = tf_weight * idf_dict[term]
-            doc_weights[term] = tfidf
-            sum_of_squares += tfidf * tfidf
+# convert to list because list is an ordered data structure, won't lose order from here on out
+search_Terms = list(search_Terms)
 
-        norm_denominator = math.sqrt(sum_of_squares)
+docTFvectors = {}
+DF = np.zeros(len(search_Terms), dtype=np.float64)
 
-        norm_vector = {}
-        if norm_denominator > 0:
-            for term, weight in doc_weights.items():
-                norm_vector[term] = weight / norm_denominator
+for docKey in dicDoc.keys():
+    tf = np.zeros(len(search_Terms), dtype=np.float64)
+    index = 0
+    # tf = actual occurrence of term/doc, TF = weighted tf using log
+    for term in search_Terms:            
+        if dicDoc[docKey][1].get(term, 0) != 0:            
+            tf[index] = 1 + math.log(dicDoc[docKey][1].get(term, 0))
+            # Fixed: DF tracks Document Frequency (how many docs contain the term), increment by 1 per doc
+            DF[index] += 1 
+        index += 1
+    docTFvectors[docKey] = tf
 
-        normalized_doc_vectors[docKey] = norm_vector
+IDF = np.zeros(len(search_Terms), dtype=np.float64)  
+i = 0 
+total_docs = len(dicDoc)
+for term in search_Terms:
+    if DF[i] > 0:
+        IDF[i] = math.log(total_docs / DF[i])
+    else:
+        IDF[i] = 0.0
+    i += 1
 
-    return normalized_doc_vectors, idf_dict
+docsTFIDFvectors = {}
+for aDoc in docTFvectors.keys():
+    tfidf = np.zeros(len(search_Terms), dtype=np.float64)
+    i = 0
+    normalizationDeno = 0
+    for freq in docTFvectors[aDoc]:
+        tfidf[i] = docTFvectors[aDoc][i] * IDF[i]
+        normalizationDeno += tfidf[i] * tfidf[i]
+        i += 1
+    sqrtND = normalizationDeno ** .5
+    finaldocvector = tfidf
+    if sqrtND > 0:
+        finaldocvector = tfidf / sqrtND
+    # docsTFIDFvectors[aDoc] = vectors of TF, where aDoc = docID
+    docsTFIDFvectors[aDoc] = finaldocvector
 
-def process_query(query_str, stop_words, stemmer, idf_dict):
-    """Preprocesses user query and computes normalized query vector manually."""
-    words = query_str.split()
-    query_tokens = []
-    
-    for word in words:
-        word_lower = word.lower()
-        if word_lower not in stop_words:
-            query_tokens.append(stemmer.stem(word_lower))
-
-    query_tf = {}
-    for term in query_tokens:
-        query_tf[term] = query_tf.get(term, 0) + 1
-
-    sum_of_squares = 0.0
-    query_weights = {}
-    for term, count in query_tf.items():
-        if term in idf_dict:
-            tf_weight = 1.0 + math.log(count)
-            query_weights[term] = tf_weight
-            sum_of_squares += tf_weight * tf_weight
-
-    query_norm = math.sqrt(sum_of_squares)
-
-    normalized_query = {}
-    if query_norm > 0:
-        for term, weight in query_weights.items():
-            normalized_query[term] = weight / query_norm
-
-    return normalized_query
-
-def calculate_cosine_similarity(norm_doc_vec, norm_query_vec):
-    """Calculates dot product of two normalized sparse vectors manually."""
-    dot_product = 0.0
-    for term, q_weight in norm_query_vec.items():
-        if term in norm_doc_vec:
-            dot_product += norm_doc_vec[term] * q_weight
-    return dot_product
-
-def main():
-    cacm_path = 'cacm.all'
-    stopwords_path = 'stopwords.txt'
-
-    stemmer = PorterStemmer()
-    stop_words = load_stopwords(stopwords_path)
-
-    print("Parsing corpus...")
-    dicDoc = parse_corpus(cacm_path, stop_words, stemmer)
-    if not dicDoc:
-        print("Error: Could not read corpus.")
-        return
-
-    wordsDoc = build_inverted_index(dicDoc)
-    normalized_doc_vectors, idf_dict = compute_tfidf_and_normalize(dicDoc)
-
-    print("\n--- Search Engine Ready ---")
-    while True:
-        user_input = input("\nEnter search terms (or type 'quit'): ").strip()
-        if user_input.lower() == 'quit':
-            print("Terminating program...")
+## Run Search Program: User interaction, query and doc cosine similarity, 
+# all the action happens here.    
+def userinterface(search_Terms, docsTFIDFvectors):
+    # initialize a vector of 0s for the query whose length is equal to length of the searchable corpus
+    while(1):
+        inp = input("Enter the terms that you wish to search: ")
+        if inp == "quit":
+            print("You've terminated the program!")
             break
-        if not user_input:
+        if not inp.strip():
             continue
-
-        query_vector = process_query(user_input, stop_words, stemmer, idf_dict)
+            
+        queryvec = np.zeros(len(search_Terms), dtype=np.float64)
+        # take all arguments and tokenize using .split()
+        lstinpt = inp.split()
+        stemming = PorterStemmer()
+        stop_words = load_stopwords()
         
-        results = []
-        for doc_id, doc_vector in normalized_doc_vectors.items():
-            score = calculate_cosine_similarity(doc_vector, query_vector)
-            if score > 0:
-                results.append((doc_id, score))
+        # for each token in query, preprocess and match to search_Terms index
+        for item in lstinpt:
+            item_lower = item.lower()
+            if item_lower not in stop_words:
+                stemmed_item = stemming.stem(item_lower)
+                if stemmed_item in search_Terms:
+                    i = search_Terms.index(stemmed_item)
+                    queryvec[i] += 1 # if query term is in searchable terms, add to query vector
 
-        results.sort(key=lambda item: item[1], reverse=True)
+        # Compute query term frequencies (1 + log(tf))
+        finalqueryTFvectors = np.zeros(len(search_Terms), dtype=np.float64)
+        for i in range(len(search_Terms)):
+            if queryvec[i] > 0:
+                finalqueryTFvectors[i] = 1 + math.log(queryvec[i])
 
-        if not results:
+        # Compute cosine similarity across all document vectors
+        scores = {}
+        for docKey in docsTFIDFvectors.keys():
+            docweights = docsTFIDFvectors[docKey]
+            # Numerator: dot product of doc vector and query vector
+            numerator = np.dot(docweights, finalqueryTFvectors)
+            
+            # Denominator: product of L2 norms
+            doc_norm = np.linalg.norm(docweights)
+            query_norm = np.linalg.norm(finalqueryTFvectors)
+            denominator = doc_norm * query_norm
+            
+            if denominator > 0:
+                similarity_score = numerator / denominator
+                if similarity_score > 0:
+                    scores[docKey] = similarity_score
+
+        # Sort documents based on similarity scores for ranked retrieval
+        sorted_results = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        
+        if not sorted_results:
             print("No matching documents found.")
         else:
-            print("\nTop 10 Results:")
-            for rank, (doc_id, score) in enumerate(results[:10], 1):
-                print(f"{rank}. Document {doc_id} (Similarity: {score:.4f})")
+            print("\nTop Results:")
+            for rank, (doc_id, score) in enumerate(sorted_results[:10], 1):
+                print(f"{rank}. Document {doc_id} (Score: {score:.4f})")
 
 if __name__ == "__main__":
-    main()
+    userinterface(search_Terms, docsTFIDFvectors)
