@@ -96,6 +96,11 @@ def build_tfidf_matrix(documents, vocab):
     
     # =========================================================================
     # L2 NORMALIZATION (Written from scratch using raw math, actively used)
+    # Normally, one uses NumPy's built-in vector norm function
+    # norms = np.linalg.norm(tfidf_matrix, axis=1, keepdims=True)
+    # norms[norms == 0] = 1  # Prevent division by zero for empty documents
+    # tfidf_matrix = tfidf_matrix / norms
+    # For sake of practice, written manually, self-taught L2 normalization
     # =========================================================================
     manual_norms = np.zeros((num_docs, 1), dtype=np.float64)
     for i in range(num_docs):
