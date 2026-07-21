@@ -1,3 +1,4 @@
+```python
 # First, extract a user's gmail for email messages which will form the corpus
 # This corpus will then be exported to Google Sheets
 # As explained in the proposal, the intended usage of this program 
@@ -116,7 +117,7 @@ def clean_and_tokenize(text):
     """Tokenizes text into lowercase words, stripping punctuation."""
     if not text:
         return []
-    # take all arguments and tokenize using .split() or regex equivalent
+    # Take all arguments and tokenize using regex word boundaries
     return re.findall(r'\b\w+\b', text.lower())
 
 # Create dictionaries of body and term frequencies
@@ -125,7 +126,7 @@ def clean_and_tokenize(text):
 def build_inverted_index(emails):
     """Builds a stemmed inverted index mapping keywords to email Message-IDs."""
     stemmer = PorterStemmer()
-    stopwords_set = load_stopwords() # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
+    stopwords_set = load_stopwords() # Snippet referenced from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
     inverted_index = {}
     
     for msg_id, email_data in emails.items():
@@ -137,7 +138,7 @@ def build_inverted_index(emails):
         
         for token in tokens:
             if token not in stopwords_set:
-                # FIX THIS?? handled type conversion and single string issue cleanly here
+                # Stem individual token securely instead of handling single string conversions
                 stemmed_word = stemmer.stem(token)
                 if stemmed_word not in inverted_index:
                     inverted_index[stemmed_word] = set()
@@ -150,7 +151,7 @@ def build_inverted_index(emails):
 # ==========================================
 
 # Dataframes are reliable structures to store data which must be transformed into CSV files 
-# (Since Google Sheets are spreadsheets, I treat them as any comma seperated sheet)
+# (Since Google Sheets are spreadsheets, I treat them as any comma separated sheet)
 def export_to_google_sheets(all_emails, credentials_file, sheet_name):
     """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets."""
     if not all_emails:
@@ -231,3 +232,5 @@ if __name__ == "__main__":
         user_input_search(all_emails)
     else:
         print("No emails retrieved. Program exiting.")
+
+```
