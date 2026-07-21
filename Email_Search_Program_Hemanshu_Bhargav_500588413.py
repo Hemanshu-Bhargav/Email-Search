@@ -1,5 +1,4 @@
-# First, for educational purposes (or to fulfill workload requirements)
-# I extract a user's gmail for email messages which will form the corpus
+# First, extract a user's gmail for email messages which will form the corpus
 # This corpus will then be exported to Google Sheets
 # As explained in the proposal, the intended usage of this program 
 # is to "bridge the gap" that exists for Google Add-on development
@@ -191,7 +190,7 @@ def export_to_Google_Sheets(subject_column, body_column, date_column):
 #                                print()
 #        
 #       # print(df['Body of Email'])
-#        #BELOW LOOP DOESNT WORK, FIX!
+#        # BELOW LOOP DOES NOT WORK, FIX!
 #        # initialize dictionary to store emails and frequencies
 ## Use nested or singular dictionaries (nested dictionary approach is both efficient and modular, 
 ## so making it an optimal storage strategy)
