@@ -9,11 +9,7 @@
 # Note: Understandably, python's execution is not as fast as say Java's, due 
 # to the differences of compiled and interpreted languages, but because assignment
 # one and two were written in Python, this project is as well (due to time constraints)
-import email, imaplib, json, os, re, getpass, math, sys, time
-# import os, re, time, sys
-import numpy as np
-from nltk.stem import PorterStemmer
-import pandas as pd
+
 # As add-ons can only use Google sheets for their database and because parsing attachments
 # is both out of the scope of this project and ethically questionable, attachments are ignored 
 
@@ -21,203 +17,217 @@ import pandas as pd
 # email server. Due to the "business case" outlined in the proposal, only Google accounts 
 # are used
 
+import email
+import imaplib
+import json
+import os
+import re
+import getpass
+import pandas as pd
+import numpy as np
+from nltk.stem import PorterStemmer
+import pygsheets
+
+# ==========================================
+# CONFIGURATION
+# ==========================================
+# Replace this with your service account file path or use environment variables
+GOOGLE_CREDENTIALS_FILE = os.getenv(
+    "GOOGLE_CREDENTIALS_PATH", "path/to/your/service_account.json"
+)
+GOOGLE_SHEET_NAME = "CPS 842 Project V1"
+
+# ==========================================
+# IMAP AUTHENTICATION & EMAIL FETCHING
+# ==========================================
+
 # IR app prompts user for their credentials
-def userprompt():
-    username = input("Please enter your gmail username: ")
-    password = getpass.getpass("Enter your password:  ")
-    receipient = input("Please which receipient's emails you'd like to store: ")
-    return username, password, receipient
-username, password, receipient = userprompt()
-def mainsignin(username, password, receipient):
-    # Pass Google's server link as a parameter
-    sign_in_link = imaplib.IMAP4_SSL("imap.gmail.com")
-    sign_in_link.login(username, password)
-    sign_in_link.select("INBOX")
-    resp, items = sign_in_link.search(None, 'FROM', receipient)
-    
-    all_emails = {}
-    for emailid in items[0].split():
-        resp, data = sign_in_link.fetch(emailid, "(RFC822)") #change to read-only version later
-        if resp != 'OK':
-            print("Could not get a response from server")
-            break
-    
-        msg = email.message_from_bytes(data[0][1])
-        # email_info = {**msg} # Adds all data to the resulting dictionary
-        email_info = {
-            'Date': msg['Date'],
-            'Subject': msg['Subject'],
-            'From': msg['From'],
-        }
-        if msg.is_multipart():
-            for payload in msg.get_payload():
-                email_info['body'] = payload.get_payload()
-        else:
-            email_info['body'] = msg.get_payload()
-        all_emails[msg['Message-ID']] = email_info
-   # print(all_emails)
-    return all_emails
-    sign_in_link.logout()
-def userinput(all_emails):
-    while(1):
-        searchword = input("Please enter a search term: ")
-        if searchword == "quit":
-            print("You've terminated the program!")
-            break
-        else:
-            #take all arguments and tokenize using .split()
-            searchword = searchword.split()
-            if searchword not in all_emails.values():
-                print("Search term does not exist")
-            else:
-                for item in searchword: #for subject in subject.values():
-                    for d in all_emails.values():
-                        if item in d['body']:
-                            print(d['body'])
-                            print(d['Subject'])
-all_emails = mainsignin(username, password, receipient)
-userinput(all_emails)
+def user_prompt():
+    username = input("Please enter your Gmail username: ")
+    password = getpass.getpass("Enter your password: ")
+    recipient = input("Please enter whose emails you'd like to store (e.g., sender@gmail.com): ")
+    return username, password, recipient
 
-#print(json.dumps(all_emails, indent=4))
-#print(get_bodies(all_emails))
-
+def fetch_emails(username, password, recipient):
+    """Connects to Gmail via IMAP and extracts emails from a specific sender."""
+    try:
+        # Pass Google's server link as a parameter
+        sign_in_link = imaplib.IMAP4_SSL("imap.gmail.com")
+        sign_in_link.login(username, password)
+        sign_in_link.select("INBOX")
         
-def get_column(emails, column):
-    """ Returns a list of email bodies
+        resp, items = sign_in_link.search(None, 'FROM', recipient)
+        if resp != 'OK' or not items[0]:
+            print("No messages found or failed to search inbox.")
+            return {}
 
-    param emails: Dictionary of emails
-    """
-    value =  [d[column] for d in emails.values()]
-   # print(type(value))
-    return value
-# Extract columns to begin inverted index construction and to export to Google Sheets
-date_column = get_column(all_emails, 'Date')
-body_column= get_column(all_emails, 'body')
-subject_column= get_column(all_emails, 'Subject')
+        all_emails = {}
+        for emailid in items[0].split():
+            resp, data = sign_in_link.fetch(emailid, "(RFC822)") # change to read-only version later
+            if resp != 'OK':
+                print(f"Could not get a response from server for ID {emailid}")
+                continue
+        
+            msg = email.message_from_bytes(data[0][1])
+            
+            # Extract body safely
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            body = payload.decode('utf-8', errors='ignore')
+                            break
+            else:
+                payload = msg.get_payload(decode=True)
+                if payload:
+                    body = payload.decode('utf-8', errors='ignore')
+
+            email_info = {
+                'Date': msg.get('Date'),
+                'Subject': msg.get('Subject'),
+                'From': msg.get('From'),
+                'body': body
+            }
+            
+            msg_id = msg.get('Message-ID', str(emailid))
+            all_emails[msg_id] = email_info
+
+        sign_in_link.logout()
+        return all_emails
+
+    except Exception as e:
+        print(f"An error occurred during IMAP execution: {e}")
+        return {}
+
+# ==========================================
+# NLP & INVERTED INDEX PIPELINE
+# ==========================================
+
+def load_stopwords():
+    """Loads stopwords from file if available, otherwise uses a standard set."""
+    if os.path.exists('stopwords.txt'):
+        with open('stopwords.txt', 'r', encoding='utf-8') as f:
+            return set(line.strip().lower() for line in f)
+    return {'the', 'is', 'at', 'which', 'and', 'a', 'an', 'in', 'to', 'of', 'for', 'on', 'with'}
+
+def clean_and_tokenize(text):
+    """Tokenizes text into lowercase words, stripping punctuation."""
+    if not text:
+        return []
+    # take all arguments and tokenize using .split() or regex equivalent
+    return re.findall(r'\b\w+\b', text.lower())
 
 # Create dictionaries of body and term frequencies
 # @param body, subject refers to body and subject text
 # the only columns which are relevant and are used for the inverted index
-def invertedindex(body, subject):
-    for word in body, subject:
-        word = (str(word)).split()
-        corpus = word.split()
-        #print(corpus)
-    return corpus
-#corpus = invertedindex(body_column, subject_column)
-def stopwords(corpus):
-    stop = open('stopwords.txt', 'r')
-    criteria = set(stop)
-    # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
-    filtered_words = [w for w in corpus if w not in criteria]
-    return filtered_words
+def build_inverted_index(emails):
+    """Builds a stemmed inverted index mapping keywords to email Message-IDs."""
+    stemmer = PorterStemmer()
+    stopwords_set = load_stopwords() # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
+    inverted_index = {}
+    
+    for msg_id, email_data in emails.items():
+        subject = email_data.get('Subject', '') or ''
+        body = email_data.get('body', '') or ''
+        combined_text = f"{subject} {body}"
+        
+        tokens = clean_and_tokenize(combined_text)
+        
+        for token in tokens:
+            if token not in stopwords_set:
+                # FIX THIS?? handled type conversion and single string issue cleanly here
+                stemmed_word = stemmer.stem(token)
+                if stemmed_word not in inverted_index:
+                    inverted_index[stemmed_word] = set()
+                inverted_index[stemmed_word].add(msg_id)
+                
+    return {word: list(msg_ids) for word, msg_ids in inverted_index.items()}
 
-def mystemmer(stopped_words):
-    stemming = PorterStemmer()
-    token = str(stopped_words) #FIX THIS?? causes search_terms to be one string of corpus
-    #for this reason search_Terms was used
-    stemmed_terms = stemming.stem(token)
-    return stemmed_terms
-
-#stopped_words = stopwords(all_emails) #change to corpus
-#search_Terms = mystemmer(stopped_words)
+# ==========================================
+# GOOGLE SHEETS & DATAFRAME INTEGRATION
+# ==========================================
 
 # Dataframes are reliable structures to store data which must be transformed into CSV files 
 # (Since Google Sheets are spreadsheets, I treat them as any comma seperated sheet)
-def export_to_Google_Sheets(subject_column, body_column, date_column):
-    columns = ['Subject of Email','Date of Email', 'Body of Email']
-    df = pd.DataFrame(index = [0] , columns = columns)
-    df.loc[:, 'Subject of Email'] = subject_column
-    df.loc[:, 'Date of Email'] = date_column
-    df.loc[:, 'Body of Email'] = body_column
+def export_to_google_sheets(all_emails, credentials_file, sheet_name):
+    """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets."""
+    if not all_emails:
+        print("No emails to export.")
+        return
 
-## Grab all email messages
-#
-#sign_in_link.list()
-#
-## Choose the inbox to retrieve emails from. Of course, we can pass
-## any sub-folder we wish, by simply prompting the user and passing the
-## string we save. (DEMO THIS LATER)
-#sign_in_link.select("INBOX")
-#receipient = input("Please which receipient's emails you'd like to store: ")
-#resp, items = sign_in_link.search(None, 'FROM', receipient)
-#items = items[0].split()  
-#body = ""
-#for emailid in items:
-#    resp, data = sign_in_link.fetch(emailid, "(RFC822)") #change to read-only version later
-#    data.append(data[0][1]) #appends all emails instead of retrieving only latest
-#    if (resp != 'OK'):
-#        print("Could not get a response from server")
-#        break
-# # Gets body with all network details when printed "as_string"  msg1 = email.message_from_bytes(data[0][1])
-## Get Subject and Date 
-#    for response_part in data:
-#        if isinstance(response_part, tuple):
-#          msg = email.message_from_bytes(response_part[1]) #equivalent to from_string, but didn't work, possibly due to Python 3
-#          varSubject = msg['subject']  
-#          varDate = msg['date']
-#         #STORE SCRAPED EMAIL DATA IN DATAFRAME, rather than dictionary to export as Google Sheet
-#          columns = ['Subject of Email','Date of Email', 'Body of Email']
-#          df = pd.DataFrame(index = [0] , columns = columns)
-#          df.loc[:, 'Subject of Email'] = varSubject
-#          df.loc[:, 'Date of Email'] = varDate
-#        #  print("Subject:", varSubject, "This email was sent on", varDate)
-#          # Extract email body without the network details (body extraction is not a one-liner)
-#          messageMainType = msg.get_content_maintype()
-#          if messageMainType == 'multipart':
-#              for part in msg.get_payload(): #think of payload as the body
-#                  if part.get_content_maintype() == 'text':
-#                      body = part.get_payload()
-#                  body = ""
-#        elif messageMainType == 'text':
-#            body = msg.get_payload()
-#        df.loc[:, 'Body of Email'] = body
-#        print(df)
-#def userinput(all_emails,)
-#        while(1):
-#            searchword = input("Please enter a search term: ")
-#            if searchword == "quit":
-#                 print("You've terminated the program!")
-#                 break
-#            else:
-#                #take all arguments and tokenize using .split()
-#                searchword = searchword.split()
-#                 #for each token in "argv", repeat normalization procedure
-#                for item in searchword:
-#                    for subject in subject.values():
-#                        for value in body.values():
-#                            if item = body[value]:
-#                                print()
-#        
-#       # print(df['Body of Email'])
-#        # BELOW LOOP DOES NOT WORK, FIX!
-#        # initialize dictionary to store emails and frequencies
-## Use nested or singular dictionaries (nested dictionary approach is both efficient and modular, 
-## so making it an optimal storage strategy)
-#        emaildict = {} 
-#        for key in emaildict.keys():
-#            emaildict[key] = varSubject
-#            print(emaildict.keys())
-#        for value in emaildict.values():
-#            emaildict[value] = body
-#        print(emaildict.values())
-#import pygsheets
-## Create google cloud API, service account, Google sheet and enable domain delegation prior to below
-##authorization
-#gc = pygsheets.authorize(service_file='C:/Users/Hemanshu/Desktop/inbound-lattice-260111-1786ae9e0f23.json')
-##open the google spreadsheet (where 'PY to Gsheet Test' is the name of my sheet)
-##sh = gc.open('CPS 842 Project V1')
-##
-###select the first sheet 
-##wks = sh[0]
-##
-###update the first sheet with df, starting at cell B2. 
-##wks.set_dataframe(df,(1,1))
-##wks.set_dataframe(df,(0,0))
-##wks.set_dataframe(df,(0,1))
-##wks.set_dataframe(df,(1,0))
-##wks.set_dataframe(df,(1,2))
-##wks.set_dataframe(df,(2,0))
-##wks.set_dataframe(df,(2,1))
-##wks.set_dataframe(df,(2,2))
-#sign_in_link.logout()
+    columns = ['Subject of Email', 'Date of Email', 'Body of Email', 'From', 'Message-ID']
+    df_data = []
+    for msg_id, data in all_emails.items():
+        df_data.append({
+            'Message-ID': msg_id,
+            'Subject of Email': data.get('Subject'),
+            'Date of Email': data.get('Date'),
+            'From': data.get('From'),
+            'Body of Email': data.get('body')
+        })
+    
+    df = pd.DataFrame(df_data)
+
+    try:
+        # Create google cloud API, service account, Google sheet and enable domain delegation prior to below authorization
+        gc = pygsheets.authorize(service_file=credentials_file)
+        sh = gc.open(sheet_name)
+        wks = sh[0]
+        wks.set_dataframe(df, (1, 1))
+        print(f"Successfully exported {len(df)} emails to Google Sheet: {sheet_name}")
+    except Exception as e:
+        print(f"Google Sheets API integration failed ({e}). Exporting to local CSV instead.")
+        df.to_csv("exported_emails.csv", index=False)
+        print("Data successfully saved to 'exported_emails.csv'.")
+
+# ==========================================
+# CLI INTERACTIVE SEARCH
+# ==========================================
+
+def user_input_search(all_emails):
+    """Allows interactive search queries across the loaded email corpus."""
+    stemmer = PorterStemmer()
+    while True:
+        searchword = input("\nPlease enter a search term (or type 'quit' to exit): ").strip()
+        if searchword.lower() == "quit":
+            print("You've terminated the program!")
+            break
+        
+        stemmed_query = stemmer.stem(searchword.lower())
+        found = False
+        
+        for msg_id, data in all_emails.items():
+            body_text = (data.get('body') or '').lower()
+            subject_text = (data.get('Subject') or '').lower()
+            
+            if stemmed_query in body_text or stemmed_query in subject_text or searchword.lower() in body_text:
+                print(f"\n--- Match Found ---")
+                print(f"Subject: {data.get('Subject')}")
+                print(f"Date: {data.get('Date')}")
+                print(f"Body Snippet: {data.get('body')[:300]}...")
+                found = True
+                
+        if not found:
+            print("Search term does not exist")
+
+# ==========================================
+# EXECUTION ENTRY POINT
+# ==========================================
+if __name__ == "__main__":
+    username, password, recipient = user_prompt()
+    
+    print("Connecting to IMAP and fetching emails...")
+    all_emails = fetch_emails(username, password, recipient)
+    
+    if all_emails:
+        print("Constructing inverted index...")
+        inverted_idx = build_inverted_index(all_emails)
+        
+        print("Exporting data to Google Sheets...")
+        export_to_google_sheets(all_emails, GOOGLE_CREDENTIALS_FILE, GOOGLE_SHEET_NAME)
+        
+        user_input_search(all_emails)
+    else:
+        print("No emails retrieved. Program exiting.")
