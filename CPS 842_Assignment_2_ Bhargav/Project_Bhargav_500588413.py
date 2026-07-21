@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-#Main Search Program, uses file cacm.all, qrels.text, query.text & stopwords.text
+# Main Search Program, uses file cacm.all, qrels.text, query.text & stopwords.text
 # Hemanshu Bhargav 500588413
 
 # For Reference: Below lists the organization of the different parts of the corpus in their respective data structures
@@ -49,40 +49,43 @@ def invert(cacm):
 
 
             elif ".I" in line:
-                key = line.strip()
+                # Extract just the document ID string cleanly
+                key = line.strip().split()[-1] if len(line.strip().split()) > 1 else line.strip()
                 writeInFile = True
 
     # For postings file, extract terms and their document id from dictionary
     # wordsdoc = terms and the documents they occur in
     wordsDoc = {}
     for doc in dicDoc:
-        for key in dicDoc[doc][1].keys():
+        for term_key in dicDoc[doc][1].keys():
             # if not already present
-            if key not in wordsDoc.keys():
-                wordsDoc[key] = [doc]
+            if term_key not in wordsDoc.keys():
+                wordsDoc[term_key] = [doc]
             else:
                 # key = term, value is all documents containing that key
-                wordsDoc[key] = wordsDoc[key] + [doc]
+                wordsDoc[term_key] = wordsDoc[term_key] + [doc]
 
     # Above code continued and terms sorted alphabetically
     search = sorted(wordsDoc.keys())
     #      print(key, " - is in documents: ", wordsDoc[key])
 
-    # wordsDoc =  terms and the documents they occur in
+    # wordsDoc = terms and the documents they occur in
     search_terms = list(search)
 
-    def stopwords(search_terms):
-        stop = open('stopwords.txt', 'r')
-        criteria = list(set(stop))
+    def stopwords(terms_list):
+        if os.path.exists('stopwords.txt'):
+            with open('stopwords.txt', 'r', encoding='utf-8') as stop:
+                criteria = set(line.strip().lower() for line in stop)
+        else:
+            criteria = {'the', 'is', 'at', 'which', 'and', 'a', 'an', 'in', 'to', 'of', 'for', 'on', 'with'}
         # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
-        filtered_words = [w for w in search_terms if w not in criteria]
+        filtered_words = [w for w in terms_list if w.lower() not in criteria]
         return filtered_words
 
     def mystemmer(stopped_words):
         stemming = PorterStemmer()
-        token = (stopped_words) #FIX THIS?? causes search_terms to be one string of corpus
-        #for this reason search_Terms was used
-        stemmed_terms = stemming.stem(token)
+        # FIX THIS?? Handled type issue by iterating over list tokens rather than passing the list as a string
+        stemmed_terms = [stemming.stem(str(token)) for token in stopped_words]
         return stemmed_terms
 
     stopped_words = stopwords(search_terms)
@@ -92,4 +95,3 @@ def invert(cacm):
 
 cacm = 'cacm.all'
 dicDoc, wordsDoc, search_terms = invert(cacm)
-invert(cacm)
