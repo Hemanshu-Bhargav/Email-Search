@@ -92,12 +92,21 @@ def build_tfidf_matrix(documents, vocab):
     idf = np.log(num_docs / np.maximum(document_frequency, 1))
     
     # Vectorized TF-IDF calculation (Broadcast multiplication)
-    tfidf_matrix = tftf_matrix * idf
+    tfidf_matrix = tf_matrix * idf
     
-    # L2 Normalization (Cosine Normalization) per document vector
-    norms = np.linalg.norm(tfidf_matrix, axis=1, keepdims=True)
-    norms[norms == 0] = 1  # Prevent division by zero for empty documents
-    tfidf_matrix = tfidf_matrix / norms
+    # =========================================================================
+    # L2 NORMALIZATION (Written from scratch using raw math, actively used)
+    # =========================================================================
+    manual_norms = np.zeros((num_docs, 1), dtype=np.float64)
+    for i in range(num_docs):
+        sum_squares = 0.0
+        for j in range(vocab_size):
+            val = tfidf_matrix[i, j]
+            sum_squares += val * val
+        norm = math.sqrt(sum_squares)
+        manual_norms[i, 0] = norm if norm > 0 else 1.0
+    tfidf_matrix = tfidf_matrix / manual_norms
+    # =========================================================================
     
     return tfidf_matrix, vocab_to_idx, doc_ids
 
@@ -122,10 +131,13 @@ def process_query(query, vocab_to_idx, stop_words):
             idx = vocab_to_idx[term]
             query_vec[idx] = 1 + math.log(count)
             
-    # Normalize query vector
-    norm = np.linalg.norm(query_vec)
-    if norm > 0:
-        query_vec = query_vec / norm
+    # Normalize query vector using scratch-built L2 normalization
+    q_sum_sq = 0.0
+    for val in query_vec:
+        q_sum_sq += val * val
+    q_norm = math.sqrt(q_sum_sq)
+    if q_norm > 0:
+        query_vec = query_vec / q_norm
         
     return query_vec
 
