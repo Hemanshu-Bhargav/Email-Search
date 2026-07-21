@@ -17,8 +17,8 @@ This project builds a portable email search system designed to "bridge the gap" 
 * **IMAP Email Extraction:** Connects securely to `imap.gmail.com` via SSL, parses multipart message payloads to isolate plain-text bodies, dates, subjects, and senders, and filters messages based on a target recipient[cite: 5].
 * **Preprocessing & Stemming:** Applies tokenization via regular expressions (`re.findall`), lowercasing, stopword removal, and morphological reduction using NLTK's `PorterStemmer`[cite: 3, 5].
 * **Vector Space Model (TF-IDF):** 
-  * Computes log-normalized term frequency: $1 + \log(\text{tf})$[cite: 3].
-  * Computes Inverse Document Frequency (IDF) across the email corpus[cite: 3].
+  * Computes log-normalized term frequency
+  * Computes Inverse Document Frequency (IDF) across the email corpus
   * Implements manual and NumPy-backed **L2 Normalization** for document and query vectors to scale lengths properly[cite: 3].
 * **Ranked Retrieval (Cosine Similarity):** Because document and query vectors are L2-normalized, cosine similarity simplifies to calculating the dot product (`tfidf_matrix.dot(query_vec)`), ranking results in descending order by relevance score[cite: 3].
 * **Database & Cloud Integration:** Utilizes `pygsheets` to sync structured Pandas DataFrames directly into Google Sheets (`CPS 842 Project V1`), with automatic fallback to local CSV export (`exported_emails.csv`) if API credentials are unavailable[cite: 5].
