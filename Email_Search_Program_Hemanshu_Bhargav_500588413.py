@@ -1,22 +1,26 @@
-```python
-# First, extract a user's gmail for email messages which will form the corpus
-# This corpus will then be exported to Google Sheets
-# As explained in the proposal, the intended usage of this program 
-# is to "bridge the gap" that exists for Google Add-on development
-# Although, search within Google exists, if any GMail account users wishes
-# to install an add-on for increased functionality, the onus is on the developer
-# of that add-on to implement a reliable search program which is compatible
-# with Google's services. This program aims to be a portable solution.
-# Note: Understandably, python's execution is not as fast as say Java's, due 
-# to the differences of compiled and interpreted languages, but because assignment
-# one and two were written in Python, this project is as well (due to time constraints)
+#!/usr/bin/env python
+# coding: utf-8
 
-# As add-ons can only use Google sheets for their database and because parsing attachments
-# is both out of the scope of this project and ethically questionable, attachments are ignored 
+# First, extract a user's gmail for email messages which will form the corpus[cite: 5]
+# This corpus will then be exported to Google Sheets[cite: 5]
+# As explained in the proposal, the intended usage of this program[cite: 5]
+# is to "bridge the gap" that exists for Google Add-on development[cite: 5]
+# Although, search within Google exists, if any GMail account users wishes[cite: 5]
+# to install an add-on for increased functionality, the onus is on the developer[cite: 5]
+# of that add-on to implement a reliable search program which is compatible[cite: 5]
+# with Google's services. This program aims to be a portable solution.[cite: 5]
+# Note: Understandably, python's execution is not as fast as say Java's, due[cite: 5]
+# to the differences of compiled and interpreted languages, but because assignment[cite: 5]
+# one and two were written in Python, this project is as well (due to time constraints)[cite: 5]
 
-# The imaplib library connects python scripts to any recognized 
-# email server. Due to the "business case" outlined in the proposal, only Google accounts 
-# are used
+# As add-ons can only use Google sheets for their database and because parsing attachments[cite: 5]
+# is both out of the scope of this project and ethically questionable, attachments are ignored[cite: 5]
+
+# ==========================================
+# UNIFIED EMAIL SEARCH & VECTOR SPACE ENGINE
+# Combines IMAP/Google Sheets integration with[cite: 5]
+# CPS 842 TF-IDF and Cosine Similarity Retrieval[cite: 3, 4]
+# ==========================================
 
 import email
 import imaplib
@@ -24,15 +28,16 @@ import json
 import os
 import re
 import getpass
+import math
 import pandas as pd
 import numpy as np
+from collections import Counter
 from nltk.stem import PorterStemmer
 import pygsheets
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
-# Replace this with your service account file path or use environment variables
 GOOGLE_CREDENTIALS_FILE = os.getenv(
     "GOOGLE_CREDENTIALS_PATH", "path/to/your/service_account.json"
 )
@@ -42,17 +47,16 @@ GOOGLE_SHEET_NAME = "CPS 842 Project V1"
 # IMAP AUTHENTICATION & EMAIL FETCHING
 # ==========================================
 
-# IR app prompts user for their credentials
 def user_prompt():
+    """Prompts user for Gmail credentials and recipient target[cite: 5]."""
     username = input("Please enter your Gmail username: ")
     password = getpass.getpass("Enter your password: ")
     recipient = input("Please enter whose emails you'd like to store (e.g., sender@gmail.com): ")
     return username, password, recipient
 
 def fetch_emails(username, password, recipient):
-    """Connects to Gmail via IMAP and extracts emails from a specific sender."""
+    """Connects to Gmail via IMAP and extracts emails from a specific sender[cite: 5]."""
     try:
-        # Pass Google's server link as a parameter
         sign_in_link = imaplib.IMAP4_SSL("imap.gmail.com")
         sign_in_link.login(username, password)
         sign_in_link.select("INBOX")
@@ -64,14 +68,13 @@ def fetch_emails(username, password, recipient):
 
         all_emails = {}
         for emailid in items[0].split():
-            resp, data = sign_in_link.fetch(emailid, "(RFC822)") # change to read-only version later
+            resp, data = sign_in_link.fetch(emailid, "(RFC822)")
             if resp != 'OK':
                 print(f"Could not get a response from server for ID {emailid}")
                 continue
         
             msg = email.message_from_bytes(data[0][1])
             
-            # Extract body safely
             body = ""
             if msg.is_multipart():
                 for part in msg.walk():
@@ -103,62 +106,129 @@ def fetch_emails(username, password, recipient):
         return {}
 
 # ==========================================
-# NLP & INVERTED INDEX PIPELINE
+# NLP, STOPWORDS & VOCABULARY PREPROCESSING
 # ==========================================
 
-def load_stopwords():
-    """Loads stopwords from file if available, otherwise uses a standard set."""
-    if os.path.exists('stopwords.txt'):
-        with open('stopwords.txt', 'r', encoding='utf-8') as f:
-            return set(line.strip().lower() for line in f)
+def load_stopwords(filepath='stopwords.txt'):
+    """Loads stopwords from file, stripping newline characters[cite: 3]."""
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return set(line.strip().lower() for line in f if line.strip())
     return {'the', 'is', 'at', 'which', 'and', 'a', 'an', 'in', 'to', 'of', 'for', 'on', 'with'}
 
-def clean_and_tokenize(text):
-    """Tokenizes text into lowercase words, stripping punctuation."""
-    if not text:
-        return []
-    # Take all arguments and tokenize using regex word boundaries
-    return re.findall(r'\b\w+\b', text.lower())
-
-# Create dictionaries of body and term frequencies
-# @param body, subject refers to body and subject text
-# the only columns which are relevant and are used for the inverted index
-def build_inverted_index(emails):
-    """Builds a stemmed inverted index mapping keywords to email Message-IDs."""
+def parse_and_preprocess_emails(emails, stop_words):
+    """
+    Tokenizes email subject and body, applies stopword removal, and Porter stemming[cite: 3].
+    """
     stemmer = PorterStemmer()
-    stopwords_set = load_stopwords() # Snippet referenced from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
-    inverted_index = {}
+    documents = {}
+    vocab = set()
     
-    for msg_id, email_data in emails.items():
-        subject = email_data.get('Subject', '') or ''
-        body = email_data.get('body', '') or ''
+    for msg_id, data in emails.items():
+        subject = data.get('Subject', '') or ''
+        body = data.get('body', '') or ''
         combined_text = f"{subject} {body}"
         
-        tokens = clean_and_tokenize(combined_text)
+        words = re.findall(r'\b\w+\b', combined_text.lower())
+        doc_terms = []
         
-        for token in tokens:
-            if token not in stopwords_set:
-                # Stem individual token securely instead of handling single string conversions
-                stemmed_word = stemmer.stem(token)
-                if stemmed_word not in inverted_index:
-                    inverted_index[stemmed_word] = set()
-                inverted_index[stemmed_word].add(msg_id)
+        for word in words:
+            if word not in stop_words:
+                stemmed_word = stemmer.stem(word)
+                doc_terms.append(stemmed_word)
+                vocab.add(stemmed_word)
                 
-    return {word: list(msg_ids) for word, msg_ids in inverted_index.items()}
+        documents[msg_id] = doc_terms
+
+    return documents, list(vocab)
 
 # ==========================================
-# GOOGLE SHEETS & DATAFRAME INTEGRATION
+# VECTOR SPACE MODEL & TF-IDF MATRIX (NUMPY)
 # ==========================================
 
-# Dataframes are reliable structures to store data which must be transformed into CSV files 
-# (Since Google Sheets are spreadsheets, I treat them as any comma separated sheet)
+def build_tfidf_matrix(documents, vocab):
+    """
+    Constructs a vectorized TF-IDF matrix for the email corpus using NumPy and L2 normalization[cite: 3].
+    """
+    num_docs = len(documents)
+    vocab_size = len(vocab)
+    
+    vocab_to_idx = {term: idx for idx, term in enumerate(vocab)}
+    msg_ids = list(documents.keys())
+    
+    tf_matrix = np.zeros((num_docs, vocab_size), dtype=np.float64)
+    document_frequency = np.zeros(vocab_size, dtype=np.float64)
+    
+    print("Building TF-IDF matrix for email corpus...")
+    for i, msg_id in enumerate(msg_ids):
+        term_counts = Counter(documents[msg_id])
+        
+        for term, count in term_counts.items():
+            if term in vocab_to_idx:
+                idx = vocab_to_idx[term]
+                tf_matrix[i, idx] = 1 + math.log(count)
+                document_frequency[idx] += 1
+
+    idf = np.log(num_docs / np.maximum(document_frequency, 1))
+    tfidf_matrix = tf_matrix * idf
+    
+    manual_norms = np.zeros((num_docs, 1), dtype=np.float64)
+    for i in range(num_docs):
+        sum_squares = sum(tfidf_matrix[i, j] ** 2 for j in range(vocab_size))
+        norm = math.sqrt(sum_squares)
+        manual_norms[i, 0] = norm if norm > 0 else 1.0
+    tfidf_matrix = tfidf_matrix / manual_norms
+    
+    return tfidf_matrix, vocab_to_idx, msg_ids
+
+def process_query(query, vocab_to_idx, stop_words):
+    """Converts a raw string query into a normalized TF vector[cite: 3]."""
+    stemmer = PorterStemmer()
+    vocab_size = len(vocab_to_idx)
+    query_vec = np.zeros(vocab_size, dtype=np.float64)
+    
+    words = re.findall(r'\b\w+\b', query.lower())
+    processed_terms = []
+    for word in words:
+        if word not in stop_words:
+            processed_terms.append(stemmer.stem(word))
+            
+    term_counts = Counter(processed_terms)
+    for term, count in term_counts.items():
+        if term in vocab_to_idx:
+            idx = vocab_to_idx[term]
+            query_vec[idx] = 1 + math.log(count)
+            
+    q_sum_sq = sum(val ** 2 for val in query_vec)
+    q_norm = math.sqrt(q_sum_sq)
+    if q_norm > 0:
+        query_vec = query_vec / q_norm
+        
+    return query_vec
+
+def search_emails(query_vec, tfidf_matrix, msg_ids, top_k=5):
+    """Computes cosine similarity via dot product and returns ranked results[cite: 3]."""
+    similarities = tfidf_matrix.dot(query_vec)
+    top_indices = np.argsort(similarities)[::-1][:top_k]
+    
+    results = []
+    for idx in top_indices:
+        score = similarities[idx]
+        if score > 0:
+            results.append((msg_ids[idx], score))
+            
+    return results
+
+# ==========================================
+# GOOGLE SHEETS EXPORT
+# ==========================================
+
 def export_to_google_sheets(all_emails, credentials_file, sheet_name):
-    """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets."""
+    """Exports email corpus data into a pandas DataFrame and syncs it with Google Sheets[cite: 5]."""
     if not all_emails:
         print("No emails to export.")
         return
 
-    columns = ['Subject of Email', 'Date of Email', 'Body of Email', 'From', 'Message-ID']
     df_data = []
     for msg_id, data in all_emails.items():
         df_data.append({
@@ -172,50 +242,48 @@ def export_to_google_sheets(all_emails, credentials_file, sheet_name):
     df = pd.DataFrame(df_data)
 
     try:
-        # Create google cloud API, service account, Google sheet and enable domain delegation prior to below authorization
         gc = pygsheets.authorize(service_file=credentials_file)
         sh = gc.open(sheet_name)
         wks = sh[0]
         wks.set_dataframe(df, (1, 1))
-        print(f"Successfully exported {len(df)} emails to Google Sheet: {sheet_name}")
+        print(f"Successfully exported {len(df)} emails to Google Sheet: {sheet_name}[cite: 5]")
     except Exception as e:
-        print(f"Google Sheets API integration failed ({e}). Exporting to local CSV instead.")
+        print(f"Google Sheets API integration failed ({e}). Exporting to local CSV instead[cite: 5].")
         df.to_csv("exported_emails.csv", index=False)
-        print("Data successfully saved to 'exported_emails.csv'.")
+        print("Data successfully saved to 'exported_emails.csv'[cite: 5].")
 
 # ==========================================
-# CLI INTERACTIVE SEARCH
+# INTERACTIVE CLI SEARCH LOOP
 # ==========================================
 
-def user_input_search(all_emails):
-    """Allows interactive search queries across the loaded email corpus."""
-    stemmer = PorterStemmer()
+def user_input_search(tfidf_matrix, vocab_to_idx, msg_ids, all_emails, stop_words):
+    """Allows ranked interactive TF-IDF search queries across the loaded email corpus[cite: 3, 5]."""
     while True:
-        searchword = input("\nPlease enter a search term (or type 'quit' to exit): ").strip()
-        if searchword.lower() == "quit":
-            print("You've terminated the program!")
+        user_input = input("\nEnter search query (or type 'quit' to exit): ").strip()
+        if user_input.lower() == 'quit':
+            print("Terminating program...")
             break
-        
-        stemmed_query = stemmer.stem(searchword.lower())
-        found = False
-        
-        for msg_id, data in all_emails.items():
-            body_text = (data.get('body') or '').lower()
-            subject_text = (data.get('Subject') or '').lower()
+        if not user_input:
+            continue
             
-            if stemmed_query in body_text or stemmed_query in subject_text or searchword.lower() in body_text:
-                print(f"\n--- Match Found ---")
-                print(f"Subject: {data.get('Subject')}")
-                print(f"Date: {data.get('Date')}")
-                print(f"Body Snippet: {data.get('body')[:300]}...")
-                found = True
-                
-        if not found:
-            print("Search term does not exist")
+        query_vec = process_query(user_input, vocab_to_idx, stop_words)
+        results = search_emails(query_vec, tfidf_matrix, msg_ids, top_k=5)
+        
+        if not results:
+            print("No matching documents found.")
+        else:
+            print("\nTop Matching Emails:")
+            for rank, (msg_id, score) in enumerate(results, 1):
+                email_data = all_emails.get(msg_id, {})
+                print(f"\n{rank}. Match Score: {score:.4f}")
+                print(f"   Subject: {email_data.get('Subject')}")
+                print(f"   Date: {email_data.get('Date')}")
+                print(f"   Snippet: {(email_data.get('body') or '')[:200]}...")
 
 # ==========================================
 # EXECUTION ENTRY POINT
 # ==========================================
+
 if __name__ == "__main__":
     username, password, recipient = user_prompt()
     
@@ -223,14 +291,16 @@ if __name__ == "__main__":
     all_emails = fetch_emails(username, password, recipient)
     
     if all_emails:
-        print("Constructing inverted index...")
-        inverted_idx = build_inverted_index(all_emails)
+        print("Loading stopwords and preprocessing emails...")
+        stop_words = load_stopwords('stopwords.txt')
+        documents, vocab = parse_and_preprocess_emails(all_emails, stop_words)
+        
+        print("Constructing Vector Space TF-IDF Matrix...")
+        tfidf_matrix, vocab_to_idx, msg_ids = build_tfidf_matrix(documents, vocab)
         
         print("Exporting data to Google Sheets...")
         export_to_google_sheets(all_emails, GOOGLE_CREDENTIALS_FILE, GOOGLE_SHEET_NAME)
         
-        user_input_search(all_emails)
+        user_input_search(tfidf_matrix, vocab_to_idx, msg_ids, all_emails, stop_words)
     else:
         print("No emails retrieved. Program exiting.")
-
-```
