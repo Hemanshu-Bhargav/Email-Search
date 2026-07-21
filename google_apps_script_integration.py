@@ -3,7 +3,7 @@
  * This is a helper file to showcase minimal vision of the full project.
  * Google Apps Script Companion for CPS 842 Email Search Project
  * Designed to interface with the Google Sheet database ("CPS 842 Project V1") 
- * populated by the Python email extraction and search backend[cite: 5].
+ * populated by the Python email extraction and search backend (Email_Search_Program_Hemanshu_Bhargav).
  */
 
 function onOpen() {
