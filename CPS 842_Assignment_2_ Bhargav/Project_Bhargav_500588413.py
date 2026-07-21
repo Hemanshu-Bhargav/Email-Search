@@ -78,13 +78,11 @@ def invert(cacm):
                 criteria = set(line.strip().lower() for line in stop)
         else:
             criteria = {'the', 'is', 'at', 'which', 'and', 'a', 'an', 'in', 'to', 'of', 'for', 'on', 'with'}
-        # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
         filtered_words = [w for w in terms_list if w.lower() not in criteria]
         return filtered_words
 
     def mystemmer(stopped_words):
         stemming = PorterStemmer()
-        # FIX THIS?? Handled type issue by iterating over list tokens rather than passing the list as a string
         stemmed_terms = [stemming.stem(str(token)) for token in stopped_words]
         return stemmed_terms
 
