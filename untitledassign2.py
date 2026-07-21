@@ -59,7 +59,6 @@ search_terms = list(search)
 def stopwords(search_terms):
     stop = open('stopwords.txt', 'r')
     criteria = set(stop)
-    # below 2 line snippet retrieved from https://pythonprogramming.net/stop-words-nltk-tutorial/ on October 4, 2019
     filtered_words = [w for w in search_terms if w not in criteria]
     return filtered_words
 
