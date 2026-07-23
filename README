@@ -5,21 +5,21 @@ This project builds a portable email search system designed to "bridge the gap" 
 
 ## System Architecture & Files
 1. **`Email_Search_Program_Hemanshu_Bhargav_500588413.py`**: The core Python backend script responsible for IMAP authentication, email fetching, NLP tokenization, TF-IDF vectorization, Google Sheets synchronization, and interactive search execution.
-2. **Google Apps Script Companion**: A template engine and UI sidebar script hosted inside Google Sheets to provide an alternative spreadsheet-based interface to query the populated database ("CPS 842 Project V1")[cite: 5].
+2. **Google Apps Script Companion**: A template engine and UI sidebar script hosted inside Google Sheets to provide an alternative spreadsheet-based interface to query the populated database ("CPS 842 Project V1").
 3. **`stopwords.txt`**: External stopword configuration file used to filter out noise terms during text preprocessing.
 
 ---
 
 ## Technical Implementation Details
 
-* **IMAP Email Extraction:** Connects securely to `imap.gmail.com` via SSL, parses multipart message payloads to isolate plain-text bodies, dates, subjects, and senders, and filters messages based on a target recipient[cite: 5].
-* **Preprocessing & Stemming:** Applies tokenization via regular expressions (`re.findall`), lowercasing, stopword removal, and morphological reduction using NLTK's `PorterStemmer`[cite: 3, 5].
+* **IMAP Email Extraction:** Connects securely to `imap.gmail.com` via SSL, parses multipart message payloads to isolate plain-text bodies, dates, subjects, and senders, and filters messages based on a target recipient.
+* **Preprocessing & Stemming:** Applies tokenization via regular expressions (`re.findall`), lowercasing, stopword removal, and morphological reduction using NLTK's `PorterStemmer`.
 * **Vector Space Model (TF-IDF):** 
   * Computes log-normalized term frequency
   * Computes Inverse Document Frequency (IDF) across the email corpus
-  * Implements manual and NumPy-backed **L2 Normalization** for document and query vectors to scale lengths properly[cite: 3].
-* **Ranked Retrieval (Cosine Similarity):** Because document and query vectors are L2-normalized, cosine similarity simplifies to calculating the dot product (`tfidf_matrix.dot(query_vec)`), ranking results in descending order by relevance score[cite: 3].
-* **Database & Cloud Integration:** Utilizes `pygsheets` to sync structured Pandas DataFrames directly into Google Sheets (`CPS 842 Project V1`), with automatic fallback to local CSV export (`exported_emails.csv`) if API credentials are unavailable[cite: 5].
+  * Implements manual and NumPy-backed **L2 Normalization** for document and query vectors to scale lengths properly.
+* **Ranked Retrieval (Cosine Similarity):** Because document and query vectors are L2-normalized, cosine similarity simplifies to calculating the dot product (`tfidf_matrix.dot(query_vec)`), ranking results in descending order by relevance score.
+* **Database & Cloud Integration:** Utilizes `pygsheets` to sync structured Pandas DataFrames directly into Google Sheets (`CPS 842 Project V1`), with automatic fallback to local CSV export (`exported_emails.csv`) if API credentials are unavailable.
 
 ---
 
@@ -29,4 +29,5 @@ This project builds a portable email search system designed to "bridge the gap" 
 Ensure you have Python installed along with the required dependencies:
 ```bash
 pip install pandas numpy nltk pygsheets
+
 
