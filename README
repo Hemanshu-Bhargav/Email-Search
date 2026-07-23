@@ -1,4 +1,4 @@
-#Project Overview
+# Project Overview
 This project builds a portable email search system designed to "bridge the gap" for Google Add-on development. It extracts a user's email messages from Gmail via IMAP, processes the corpus using a robust Natural Language Processing (NLP) pipeline, stores the structured dataset into Google Sheets (with a local CSV fallback), and implements a custom Vector Space Retrieval Model (TF-IDF and Cosine Similarity) from scratch.
 
 ---
