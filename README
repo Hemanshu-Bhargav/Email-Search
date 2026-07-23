@@ -29,3 +29,4 @@ This project builds a portable email search system designed to "bridge the gap" 
 Ensure you have Python installed along with the required dependencies:
 ```bash
 pip install pandas numpy nltk pygsheets
+
