@@ -1,9 +1,11 @@
 # Project Overview
+
 This project builds a portable email search system designed to "bridge the gap" for Google Add-on development. It extracts a user's email messages from Gmail via IMAP, processes the corpus using a robust Natural Language Processing (NLP) pipeline, stores the structured dataset into Google Sheets (with a local CSV fallback), and implements a custom Vector Space Retrieval Model (TF-IDF and Cosine Similarity) from scratch.
 
 ---
 
 ## System Architecture & Files
+
 1. **`Email_Search_Program_Hemanshu_Bhargav_500588413.py`**: The core Python backend script responsible for IMAP authentication, email fetching, NLP tokenization, TF-IDF vectorization, Google Sheets synchronization, and interactive search execution.
 2. **Google Apps Script Companion**: A template engine and UI sidebar script hosted inside Google Sheets to provide an alternative spreadsheet-based interface to query the populated database ("CPS 842 Project V1").
 3. **`stopwords.txt`**: External stopword configuration file used to filter out noise terms during text preprocessing.
@@ -26,8 +28,8 @@ This project builds a portable email search system designed to "bridge the gap" 
 ## How to Run the Program
 
 ### Prerequisites
+
 Ensure you have Python installed along with the required dependencies:
+
 ```bash
 pip install pandas numpy nltk pygsheets
-
-
