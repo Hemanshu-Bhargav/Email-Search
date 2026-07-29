@@ -2,7 +2,8 @@
 # coding: utf-8
 # ==========================================
 # PREFACE
-''' First, extract a user's gmail for email messages which will form the corpus
+"""
+First, extract a user's gmail for email messages which will form the corpus
 This corpus will then be exported to Google Sheets.
 As explained in the proposal, the intended usage of this program
 is to "bridge the gap" that exists for Google Add-on development.
@@ -15,8 +16,10 @@ Note: Understandably, python's execution is not as fast, as say Java's,
 because of inherent differences in execution of compiled and interpreted languages.
 Nonetheless, Python was chosen for portability being cognizant of vast library support Python offers for NLP tasks.
 Add-ons can only use Google sheets for their database and because parsing attachments
-is both out of the scope of this project and ethically questionable, therefore attachments are ignored. '''
+is both out of the scope of this project and ethically questionable, therefore attachments are ignored. 
+"""
 # ==========================================
+
 # ==========================================
 # UNIFIED EMAIL SEARCH & VECTOR SPACE ENGINE
 # Combines IMAP/Google Sheets integration with
